@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>教職員名單管理</title>
+    <style>
+        :root { --primary: #4a90e2; --success: #2ecc71; --danger: #e74c3c; --csv: #f39c12; --dark: #2c3e50; }
+        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; padding-top: 60px; /* 為返回掣留位 */ }
+
+        /* --- 新增：返回首頁浮動掣樣式 --- */
+        .floating-home-btn {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            text-decoration: none;
+            color: white;
+            background: var(--dark);
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            transition: 0.3s;
+            border: 2px solid white;
+        }
+        .floating-home-btn:hover {
+            background: #34495e;
+            transform: scale(1.05);
+        }
+        /* -------------------------- */
+
+        .card { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        
+        .control-panel { background: #ebf2fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #d0e0f0; display: flex; align-items: center; gap: 10px; }
+        
+        button { cursor: pointer; border-radius: 5px; border: none; padding: 10px 18px; font-weight: bold; transition: 0.2s; }
+        button:hover { opacity: 0.8; }
+        .btn-add { background: var(--primary); color: white; }
+        .btn-csv { background: var(--csv); color: white; }
+        .btn-save { background: var(--success); color: white; width: 100%; font-size: 18px; margin-top: 20px; padding: 15px; }
+        
+        .staff-list { margin-top: 20px; }
+        .staff-item { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #eee; padding: 10px; border-radius: 6px; margin-bottom: 8px; transition: 0.3s; }
+        .staff-item:hover { border-color: var(--primary); background: #f9fbff; }
+        .staff-item input { flex: 1; border: 1px solid #ddd; padding: 8px; border-radius: 4px; font-size: 16px; }
+        .staff-item .idx { color: #999; width: 30px; font-weight: bold; }
+        .btn-del { background: none; color: var(--danger); font-size: 20px; padding: 0 10px; }
+
+        .loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.7); display: none; justify-content: center; align-items: center; z-index: 100; font-weight: bold; }
+        .empty-hint { text-align: center; color: #999; padding: 40px; border: 2px dashed #eee; border-radius: 8px; }
+    </style>
+</head>
+<body>
+
+<a href="index.html" class="floating-home-btn">🏠 返回系統首頁</a>
+
+<div id="loading" class="loader">⚙️ 正在處理名單...</div>
+
+<div class="card">
+    <h2>👥 教職員名單管理</h2>
+    
+    <div class="control-panel">
+        <button class="btn-add" onclick="addStaff()">➕ 新增教職員</button>
+        <div style="margin-left: auto;">
+            <button class="btn-csv" onclick="exportCSV()">📥 匯出 CSV</button>
+            <button class="btn-csv" onclick="document.getElementById('csvIn').click()">📤 匯入 CSV</button>
+            <input type="file" id="csvIn" style="display:none" accept=".csv" onchange="importCSV(this)">
+        </div>
+    </div>
+
+    <div id="staffArea" class="staff-list">
+        </div>
+
+    <button class="btn-save" onclick="saveToSheet()">💾 儲存名單至 Excel</button>
+</div>
+
+<script>
+    // ⚠️ 請確保使用同一個 GAS URL
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzM9C0KUL0NyQ2woux6DJc5pNinaxfVGapGrO6dGo6pF9EcQ8zbeBRQ5Pz-npq3c_UU-w/exec"; 
+    let staffList = [];
+
+    // 初始化：自動讀取
+    window.onload = fetchStaffData;
+
+    async function fetchStaffData() {
+        toggleLoader(true);
+        try {
+            const res = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'getStaffList' })
+            });
+            const data = await res.json();
+            staffList = data.staff || [];
+            render();
+        } catch(e) {
+            console.log("讀取中或未有名單數據");
+            render();
+        }
+        toggleLoader(false);
+    }
+
+    function render() {
+        const area = document.getElementById('staffArea');
+        area.innerHTML = '';
+        
+        if(staffList.length === 0) {
+            area.innerHTML = '<div class="empty-hint">📭 目前名單為空，請新增或匯入。</div>';
+            return;
+        }
+
+        staffList.forEach((name, idx) => {
+            const div = document.createElement('div');
+            div.className = 'staff-item';
+            div.innerHTML = `
+                <span class="idx">${idx + 1}</span>
+                <input type="text" value="${name}" onchange="updateName(${idx}, this.value)" placeholder="輸入姓名">
+                <button class="btn-del" onclick="removeStaff(${idx})">×</button>
+            `;
+            area.appendChild(div);
+        });
+    }
+
+    function addStaff() {
+        staffList.push("");
+        render();
+        const inputs = document.querySelectorAll('.staff-item input');
+        inputs[inputs.length - 1].focus();
+    }
+
+    function updateName(idx, val) {
+        staffList[idx] = val.trim();
+    }
+
+    function removeStaff(idx) {
+        if(confirm("確定要刪除這位職員嗎？")) {
+            staffList.splice(idx, 1);
+            render();
+        }
+    }
+
+    async function saveToSheet() {
+        const cleanList = staffList.filter(name => name !== ""); 
+        if(cleanList.length === 0) return alert("名單唔可以係空呀！");
+
+        toggleLoader(true);
+        try {
+            const res = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'updateStaffSheet', data: cleanList })
+            });
+            const msg = await res.text();
+            alert(msg);
+        } catch(e) {
+            alert("儲存失敗，請檢查網絡。");
+        }
+        toggleLoader(false);
+    }
+
+    function exportCSV() {
+        let csv = "\ufeff教職員姓名\n";
+        staffList.forEach(name => { if(name) csv += name + "\n"; });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `StaffList_${new Date().toLocaleDateString()}.csv`;
+        link.click();
+    }
+
+    function importCSV(input) {
+        if (!input.files.length) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const lines = e.target.result.split('\n');
+            const newList = [];
+            for (let i = 1; i < lines.length; i++) {
+                const name = lines[i].trim();
+                if (name) newList.push(name);
+            }
+            if (newList.length > 0) {
+                staffList = newList;
+                render();
+                alert("CSV 名單已匯入，記得撳儲存！");
+            }
+        };
+        reader.readAsText(input.files[0]);
+    }
+
+    function toggleLoader(show) { document.getElementById('loading').style.display = show ? 'flex' : 'none'; }
+</script>
+</body>
+</html>

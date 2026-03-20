@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>當值報表系統 - 專業列印整合版</title>
+    <style>
+        :root { --primary: #3498db; --bg: #f4f7f9; --dark: #2c3e50; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; padding-top: 60px; /* 為返回掣留位 */ }
+        
+        /* --- 新增：返回首頁浮動掣樣式 --- */
+        .floating-home-btn {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            text-decoration: none;
+            color: white;
+            background: var(--dark);
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            transition: 0.3s;
+            border: 2px solid white;
+        }
+        .floating-home-btn:hover {
+            background: #34495e;
+            transform: scale(1.05);
+        }
+        /* -------------------------- */
+
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        /* 時段分塊 */
+        .time-slot-section { margin-bottom: 25px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: white; page-break-inside: avoid; }
+        .time-header { background: #4a90e2; color: white; padding: 10px 15px; font-weight: bold; display: flex; justify-content: space-between; }
+        
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 15px; border-bottom: 1px dashed #ddd; }
+        .post-box { border: 1px solid #eee; padding: 10px; border-radius: 4px; text-align: center; background: #fafafa; }
+        .post-name { font-size: 12px; color: #666; margin-bottom: 5px; border-bottom: 1px solid #eee; padding-bottom: 3px; }
+        .staff-name { color: #e67e22; font-weight: bold; font-size: 15px; }
+
+        /* 整合在時段下的空堂顯示 */
+        .free-staff-info { padding: 10px 15px; background: #eef7ff; font-size: 13px; color: #2c3e50; }
+        .free-tag { display: inline-block; background: white; border: 1px solid #3498db; padding: 2px 8px; border-radius: 4px; margin: 2px; }
+
+        /* 個人時間表卡片 - 強制分頁 */
+        .teacher-card { 
+            border: 1px solid #3498db; padding: 20px; margin: 20px 0; 
+            border-left: 8px solid #3498db; background: white; 
+        }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background: #f8f9fa; }
+
+        /* 功能按鈕 */
+        .btn { padding: 8px 18px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-blue { background: var(--primary); color: white; }
+        .btn-green { background: #27ae60; color: white; }
+        
+        .tab-nav { margin-bottom: 20px; border-bottom: 2px solid #ddd; display: flex; }
+        .tab-btn { padding: 12px 25px; cursor: pointer; border: none; background: none; font-size: 16px; color: #666; }
+        .tab-btn.active { color: var(--primary); border-bottom: 3px solid var(--primary); font-weight: bold; }
+
+        /* 列印專用 CSS */
+        @media print { 
+            .no-print, .floating-home-btn { display: none !important; } 
+            body { background: white; padding: 0; }
+            .card { box-shadow: none; border: none; padding: 0; }
+            
+            /* 全校總表列印 */
+            .time-slot-section { border: 2px solid #000; page-break-inside: avoid; margin-bottom: 30px; }
+            .time-header { background: #ddd !important; color: black !important; border-bottom: 2px solid #000; }
+            
+            /* 個人表強制每一位老師一張紙 */
+            .teacher-card { 
+                break-after: page; 
+                border: 2px solid #000 !important;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<a href="index.html" class="floating-home-btn">🏠 返回系統首頁</a>
+
+<div class="card no-print">
+    <h2 style="margin-top:0;">📊 當值報表生成系統</h2>
+    <div style="display:flex; align-items:center; gap:15px; flex-wrap: wrap;">
+        <div>
+            <strong>📅 選擇日期：</strong>
+            <input type="date" id="targetDate" style="padding: 8px; border: 1px solid #3498db; border-radius: 4px;" onchange="loadAllData()"> 
+        </div>
+        <button class="btn btn-green" onclick="exportToCSV()">📥 匯出今日 CSV</button>
+        <button class="btn" style="background:#555; color:white;" onclick="window.print()">🖨️ 列印報表 / 生成 PDF</button>
+        <span id="loader" style="display:none; color: #3498db; font-weight: bold;">⚡ 正在讀取...</span>
+    </div>
+</div>
+
+<div class="tab-nav no-print">
+    <button class="tab-btn active" onclick="switchTab('tab-main')">🏫 全校總覽 (連空堂)</button>
+    <button class="tab-btn" onclick="switchTab('tab-personal')">👨‍🏫 老師個人表 (分頁列印)</button>
+</div>
+
+<div id="tab-main" class="tab-content">
+    <div id="matrixOutput">
+        <p style="text-align:center; color:#999; padding:50px;">請先選取日期，系統將自動讀取。</p>
+    </div>
+</div>
+
+<div id="tab-personal" class="tab-content" style="display:none">
+    <div id="personalOutput"></div>
+</div>
+
+<script>
+    // 邏輯部分保持不變
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwSs1sp75iwd7e39FkQk7gMcEgLvwJ8dNarGftWfFSFT_AkA83aApZ8yKD3ydJroQsDfw/exec";
+    let dataCache = { assignments: [], absents: [], allStaff: [] };
+
+    async function loadAllData() {
+        const dateStr = document.getElementById('targetDate').value;
+        if(!dateStr) return;
+        
+        document.getElementById('loader').style.display = 'inline';
+        document.getElementById('matrixOutput').innerHTML = "正在努力同步數據...";
+        
+        try {
+            const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'getReportData', date: dateStr }) });
+            dataCache = await res.json();
+            renderMainTable();
+            renderPersonalSchedule();
+        } catch(e) {
+            alert("讀取失敗！");
+        }
+        document.getElementById('loader').style.display = 'none';
+    }
+
+    function renderMainTable() {
+        const data = dataCache.assignments;
+        if(data.length === 0) {
+            document.getElementById('matrixOutput').innerHTML = "❌ 該日期沒有任何數據。";
+            return;
+        }
+        
+        const times = [...new Set(data.map(d => d.TimeSlot))].sort();
+        let html = "";
+
+        times.forEach(t => {
+            const tasksInSlot = data.filter(d => d.TimeSlot === t);
+            
+            const busy = tasksInSlot.map(a => a.AssignedStaff);
+            const free = dataCache.allStaff.filter(s => !dataCache.absents.includes(s) && !busy.includes(s));
+
+            html += `
+                <div class="time-slot-section">
+                    <div class="time-header">
+                        <span>⏰ 時段：${t}</span>
+                        <span>當值：${tasksInSlot.length} 人</span>
+                    </div>
+                    <div class="grid-container">`;
+            
+            tasksInSlot.forEach(task => {
+                html += `
+                    <div class="post-box">
+                        <div class="post-name">${task.PostName}</div>
+                        <div class="staff-name">${task.AssignedStaff || '-'}</div>
+                    </div>`;
+            });
+            
+            html += `</div>
+                    <div class="free-staff-info">
+                        <strong>☕ 該時段可用空堂 (${free.length}位)：</strong><br>
+                        ${free.map(s => `<span class="free-tag">${s}</span>`).join('')}
+                    </div>
+                </div>`;
+        });
+        document.getElementById('matrixOutput').innerHTML = html;
+    }
+
+    function renderPersonalSchedule() {
+        const staffMap = {};
+        dataCache.assignments.forEach(a => {
+            if (!a.AssignedStaff || a.AssignedStaff === '-') return;
+            if (!staffMap[a.AssignedStaff]) staffMap[a.AssignedStaff] = [];
+            staffMap[a.AssignedStaff].push(a);
+        });
+
+        let html = "";
+        const sortedStaff = Object.keys(staffMap).sort();
+        
+        sortedStaff.forEach(name => {
+            html += `<div class="teacher-card">
+                <div style="font-size:22px; border-bottom:3px solid #333; padding-bottom:10px;">
+                    <b>${name} 老師</b> - 個人當值時間表
+                </div>
+                <p>日期：${document.getElementById('targetDate').value}</p>
+                <table>
+                    <tr><th style="width:40%">時段</th><th>當值崗位</th></tr>`;
+            staffMap[name].forEach(task => {
+                html += `<tr><td>${task.TimeSlot}</td><td><b>${task.PostName}</b></td></tr>`;
+            });
+            html += `</table>
+                <div style="margin-top:30px; font-size:12px; color:#666; text-align:right;">
+                    此頁為個人專用，列印後請妥善保存。
+                </div>
+            </div>`;
+        });
+        document.getElementById('personalOutput').innerHTML = html || "暫無數據";
+    }
+
+    function switchTab(id) {
+        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(id).style.display = 'block';
+        event.currentTarget.classList.add('active');
+    }
+
+    function exportToCSV() {
+        if(dataCache.assignments.length === 0) return alert("請先讀取數據！");
+        let csv = "\ufeff時段,崗位,老師\n";
+        dataCache.assignments.forEach(a => {
+            csv += `"${a.TimeSlot}","${a.PostName}","${a.AssignedStaff}"\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `DutyReport_${document.getElementById('targetDate').value}.csv`;
+        link.click();
+    }
+</script>
+</body>
+</html>

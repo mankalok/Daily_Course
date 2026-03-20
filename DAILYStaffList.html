@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>每日考勤記錄 - 不能出席設定</title>
+    <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; background: #f0f2f5; padding: 20px; }
+        
+        /* --- 新增：返回首頁掣樣式 --- */
+        .nav-header {
+            max-width: 600px;
+            margin: 0 auto 15px auto;
+            display: flex;
+            justify-content: flex-start;
+        }
+        .btn-home {
+            text-decoration: none;
+            color: #1a73e8;
+            background: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: 0.3s;
+            border: 1px solid #e8f0fe;
+        }
+        .btn-home:hover {
+            background: #e8f0fe;
+            transform: translateY(-2px);
+        }
+        @media print { .btn-home { display: none !important; } }
+        /* -------------------------- */
+
+        .card { max-width: 600px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #1a73e8; border-bottom: 2px solid #e8f0fe; padding-bottom: 10px; }
+        .date-box { background: #e8f0fe; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .row { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid #f0f0f0; transition: 0.2s; }
+        .row:hover { background-color: #f8f9fa; }
+        .staff-name { font-size: 1.1em; color: #333; }
+        .status-absent { color: #d93025; font-weight: bold; }
+        .status-present { color: #188038; }
+        .btn-save { background: #34a853; color: white; width: 100%; padding: 15px; border: none; border-radius: 6px; font-size: 18px; cursor: pointer; margin-top: 20px; font-weight: bold; }
+        .btn-save:hover { background: #2d9249; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .loader { display: none; text-align: center; padding: 15px; color: #1a73e8; font-weight: bold; }
+        input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
+        .staff-name { font-size: 1.1em; color: #333; }
+        .tip { font-size: 0.9em; color: #666; margin-top: 10px; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="nav-header">
+    <a href="index.html" class="btn-home">🏠 返回系統首頁</a>
+</div>
+
+<div class="card">
+    <h2>🗓️ 每日考勤 (不能出席設定)</h2>
+    
+    <div class="date-box">
+        <strong>選擇日期：</strong>
+        <input type="date" id="targetDate" onchange="loadData()">
+    </div>
+    
+    <div id="loader" class="loader">🔄 正在同步 Excel 數據...</div>
+    
+    <div id="listArea">
+        <p style="text-align:center; color:#999; padding: 30px;">請先選擇日期以讀取老師名單</p>
+    </div>
+
+    <button class="btn-save" onclick="saveAbsence()">💾 儲存今日考勤紀錄</button>
+    <p class="tip">※ 剔選代表該名老師當日「不能出席」排班</p>
+</div>
+
+<script>
+    // 核心功能完全保留，沒有更動
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyPlKk5udm7XaVUQIzuql4VI3dcgef3sWra84WjbIqtGjf6iXB-B2EouwV5oIHmVUGlJw/exec";
+    
+    let allStaff = [];
+    let absentSet = new Set();
+
+    function getFormattedDate(val) {
+        if (!val) return "";
+        let d = new Date(val);
+        let y = d.getFullYear();
+        let m = String(d.getMonth() + 1).padStart(2, '0');
+        let day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    async function loadData() {
+        const dateInput = document.getElementById('targetDate').value;
+        if(!dateInput) return;
+        
+        const targetDate = getFormattedDate(dateInput);
+        const loader = document.getElementById('loader');
+        const listArea = document.getElementById('listArea');
+        
+        loader.style.display = 'block';
+        listArea.style.opacity = '0.4';
+        
+        try {
+            const resStaff = await fetch(SCRIPT_URL, { 
+                method: 'POST', 
+                body: JSON.stringify({ action: 'getStaffList' }) 
+            });
+            const staffJson = await resStaff.json();
+            allStaff = staffJson.staff || [];
+
+            const resAbsence = await fetch(SCRIPT_URL, { 
+                method: 'POST', 
+                body: JSON.stringify({ action: 'getAbsenceData', date: targetDate }) 
+            });
+            const absJson = await resAbsence.json();
+            
+            absentSet = new Set();
+            if (absJson.data && absJson.data.length > 0) {
+                absJson.data.forEach(d => {
+                    if (d.Status === '不能出席') {
+                        absentSet.add(d.StaffName);
+                    }
+                });
+            }
+
+            render();
+        } catch(e) { 
+            console.error(e);
+            alert("讀取數據失敗，請檢查 GAS 部署是否正確。"); 
+        }
+        
+        loader.style.display = 'none';
+        listArea.style.opacity = '1';
+    }
+
+    function render() {
+        const area = document.getElementById('listArea');
+        if (allStaff.length === 0) {
+            area.innerHTML = '<p style="text-align:center; color:red;">尚未建立老師名單，請先到名單管理頁面新增。</p>';
+            return;
+        }
+
+        area.innerHTML = allStaff.map(name => {
+            const isAbsent = absentSet.has(name);
+            return `
+                <div class="row">
+                    <span class="staff-name">${name}</span>
+                    <label style="cursor:pointer; display: flex; align-items: center; gap: 10px;">
+                        <span class="${isAbsent ? 'status-absent' : 'status-present'}">
+                            ${isAbsent ? '不能出席' : '可以出席'}
+                        </span>
+                        <input type="checkbox" ${isAbsent ? 'checked' : ''} onchange="toggleAbsence('${name}', this.checked)"> 
+                    </label>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function toggleAbsence(name, isChecked) {
+        if(isChecked) absentSet.add(name);
+        else absentSet.delete(name);
+        render();
+    }
+
+    async function saveAbsence() {
+        const dateInput = document.getElementById('targetDate').value;
+        if(!dateInput) return alert("請先選擇日期！");
+        
+        const targetDate = getFormattedDate(dateInput);
+        document.getElementById('loader').style.display = 'block';
+
+        const payload = Array.from(absentSet).map(name => [targetDate, name, "不能出席"]);
+
+        try {
+            const res = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ 
+                    action: 'updateAbsenceSheet', 
+                    date: targetDate, 
+                    data: payload 
+                })
+            });
+            alert("✅ 考勤紀錄儲存成功！");
+        } catch(e) {
+            alert("❌ 儲存失敗，請檢查網路連線。");
+        }
+        document.getElementById('loader').style.display = 'none';
+    }
+</script>
+</body>
+</html>

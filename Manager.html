@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>課程結構管理 - 終極穩定功能版</title>
+    <style>
+        :root { 
+            --primary: #4a90e2; 
+            --success: #2ecc71; 
+            --danger: #e74c3c; 
+            --csv: #f39c12; 
+            --batch: #6c5ce7;
+            --manual: #17a2b8;
+        }
+        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; padding-top: 60px; /* 為浮動掣留位 */ }
+
+        /* --- 強制顯示：返回首頁浮動掣 --- */
+        .floating-home-btn {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            text-decoration: none;
+            color: white;
+            background: var(--primary);
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000; /* 確保喺最頂層 */
+            transition: 0.3s;
+            border: 2px solid white;
+        }
+        .floating-home-btn:hover {
+            background: #357abd;
+            transform: scale(1.05);
+        }
+        @media print { .floating-home-btn { display: none !important; } }
+        /* -------------------------- */
+
+        .card { max-width: 1000px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .control-panel { background: #ffffff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e0e6ed; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+        .section-title { font-size: 14px; font-weight: bold; color: #555; margin-bottom: 10px; display: block; border-left: 4px solid var(--primary); padding-left: 8px; }
+        button { cursor: pointer; border-radius: 6px; border: none; padding: 8px 16px; font-weight: bold; transition: 0.2s; display: inline-flex; align-items: center; gap: 5px; }
+        button:hover { opacity: 0.8; transform: translateY(-1px); }
+        .btn-gen { background: var(--batch); color: white; }
+        .btn-manual { background: var(--manual); color: white; }
+        .btn-csv-exp { background: #555; color: white; }
+        .btn-csv-imp { background: var(--csv); color: white; }
+        .btn-save { background: var(--success); color: white; width: 100%; font-size: 18px; margin-top: 20px; padding: 15px; box-shadow: 0 4px 6px rgba(46, 204, 113, 0.2); }
+        .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 15px; }
+        .time-group { border: 1px solid #e0e0e0; border-radius: 10px; margin-bottom: 20px; padding: 18px; background: #fff; transition: 0.3s; }
+        .time-group:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .time-label { font-weight: bold; color: #2c3e50; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; font-size: 16px; }
+        .tag-container { display: flex; flex-wrap: wrap; gap: 10px; }
+        .tag { background: #f8f9fa; border: 1px solid #dee2e6; padding: 6px 12px; border-radius: 6px; display: flex; align-items: center; }
+        .tag:focus-within { border-color: var(--primary); background: #e3f2fd; }
+        .tag input { border: none; background: transparent; width: 80px; text-align: center; font-weight: bold; font-size: 14px; outline: none; }
+        .del-x { color: var(--danger); margin-left: 10px; cursor: pointer; font-size: 20px; line-height: 1; font-weight: bold; }
+        .add-post-btn { background: #f0f0f0; color: #666; font-size: 12px; border: 1px dashed #ccc; }
+        .loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: none; justify-content: center; align-items: center; z-index: 100; font-weight: bold; color: var(--primary); }
+        hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
+        input[type="text"], input[type="time"], input[type="date"] { padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<a href="index.html" class="floating-home-btn">🏠 返回系統首頁</a>
+
+<div id="loading" class="loader">🔄 正在處理中...</div>
+
+<div class="card">
+    <h2>⚙️ 課程與崗位結構管理</h2>
+    
+    <div class="control-panel">
+        <span class="section-title">1️⃣ 基礎設定與工具</span>
+        <div class="row">
+            <strong>選擇日期：</strong>
+            <input type="date" id="targetDate" onchange="fetchExistingData()">
+            
+            <div style="margin-left: auto; display: flex; gap: 8px;">
+                <button class="btn-csv-exp" onclick="exportCSV()">📥 匯出 CSV</button>
+                <button class="btn-csv-imp" onclick="document.getElementById('csvIn').click()">📤 匯入 CSV</button>
+                <input type="file" id="csvIn" style="display:none" accept=".csv" onchange="importCSV(this)">
+            </div>
+        </div>
+        
+        <hr>
+        
+        <span class="section-title">2️⃣ 快速生成工具</span>
+        <div class="row">
+            <div style="background: #f0f0f0; padding: 12px; border-radius: 8px; display: flex; gap: 8px; align-items: center; border: 1px solid #ddd;">
+                <strong>批次生成：</strong>
+                級 <input type="text" id="L" value="1-6" style="width:40px; text-align:center;"> 
+                班 <input type="text" id="C" value="A-E" style="width:40px; text-align:center;">
+                時間 <input type="time" id="batchTs" value="09:00"> 至 <input type="time" id="batchTe" value="10:00">
+                <button class="btn-gen" onclick="batchGen()">🚀 批量生成</button>
+            </div>
+
+            <div style="background: #e8f4fd; padding: 12px; border-radius: 8px; display: flex; gap: 8px; align-items: center; border: 1px solid #d1e9ff;">
+                <strong>自定時段：</strong>
+                <input type="time" id="manualTs" value="08:00"> 
+                至 
+                <input type="time" id="manualTe" value="08:30">
+                <button class="btn-manual" onclick="addManualTimeSlot()">➕ 新增空格</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="contentArea">
+        <p style="text-align:center; color:#999; padding: 60px; border: 2px dashed #eee; border-radius: 10px;">請先選擇日期以讀取數據</p>
+    </div>
+
+    <button class="btn-save" onclick="saveToSheet()">💾 儲存今日所有變更至 Excel</button>
+</div>
+
+<script>
+    // 核心邏輯保持不變
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzb__68fOxfaKxb2ZoLrnkIzf83n40tZL_40rwt_9dkk0qbnkMidI88d4TW43Gc4PwOuw/exec"; 
+    let store = {};
+
+    async function fetchExistingData() {
+        const date = document.getElementById('targetDate').value;
+        if(!date) return;
+        toggleLoader(true);
+        try {
+            const res = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'getInitialData', date: date })
+            });
+            const json = await res.json();
+            store = {}; 
+            if (json.dailyStructure) {
+                const sortedData = json.dailyStructure.sort((a,b) => a.sort - b.sort);
+                sortedData.forEach(item => {
+                    if(!store[item.timeSlot]) store[item.timeSlot] = [];
+                    store[item.timeSlot].push(item.postName);
+                });
+            }
+            render();
+        } catch(e) { alert("讀取失敗"); }
+        toggleLoader(false);
+    }
+
+    function render() {
+        const area = document.getElementById('contentArea');
+        area.innerHTML = '';
+        const times = Object.keys(store).sort();
+        
+        if(times.length === 0) {
+            area.innerHTML = '<div style="padding:60px; text-align:center; color:#888; border: 2px dashed #eee; border-radius: 10px;">📅 目前冇野睇，請新增時段。</div>';
+            return;
+        }
+
+        times.forEach(t => {
+            const div = document.createElement('div');
+            div.className = 'time-group';
+            div.innerHTML = `
+                <div class="time-label">
+                    <span>⏰ 時段: ${t}</span>
+                    <button onclick="deleteTime('${t}')" style="font-size:11px; background:#fff1f0; color:#f5222d; border: 1px solid #ffa39e;">🗑️ 刪除時段</button>
+                </div>
+                <div class="tag-container" id="container-${t}"></div>
+            `;
+            area.appendChild(div);
+            
+            const container = document.getElementById(`container-${t}`);
+            store[t].forEach((p, idx) => {
+                const tag = document.createElement('div');
+                tag.className = 'tag';
+                tag.innerHTML = `
+                    <input type="text" value="${p}" onchange="store['${t}'][${idx}]=this.value">
+                    <span class="del-x" onclick="removePost('${t}',${idx})">×</span>
+                `;
+                container.appendChild(tag);
+            });
+            
+            const addBtn = document.createElement('button');
+            addBtn.className = 'add-post-btn';
+            addBtn.innerHTML = "➕ 加崗位";
+            addBtn.onclick = () => { store[t].push("新崗位"); render(); };
+            container.appendChild(addBtn);
+        });
+    }
+
+    function addManualTimeSlot() {
+        const ts = document.getElementById('manualTs').value;
+        const te = document.getElementById('manualTe').value;
+        if(!ts || !te) return alert("請選取完整時間段");
+        const timeKey = `${ts}-${te}`;
+        if(store[timeKey]) return alert("呢個時段已經喺度喇！");
+        store[timeKey] = ["新崗位"]; 
+        render();
+    }
+
+    function batchGen() {
+        const date = document.getElementById('targetDate').value;
+        if(!date) return alert("請先揀日期");
+        const t = document.getElementById('batchTs').value + "-" + document.getElementById('batchTe').value;
+        const lRange = document.getElementById('L').value.split('-').map(Number);
+        const cRange = document.getElementById('C').value.split('-');
+        if(!store[t]) store[t] = [];
+        const start = cRange[0].toUpperCase().charCodeAt(0);
+        const end = cRange[1].toUpperCase().charCodeAt(0);
+        for(let l=lRange[0]; l<=lRange[1]; l++) {
+            for(let c=start; c<=end; c++) {
+                const name = l + String.fromCharCode(c);
+                if(!store[t].includes(name)) store[t].push(name);
+            }
+        }
+        render();
+    }
+
+    async function saveToSheet() {
+        const date = document.getElementById('targetDate').value;
+        if(!date) return alert("請先揀日期");
+        const payload = [];
+        let sortIdx = 1;
+        const sortedTimes = Object.keys(store).sort();
+        sortedTimes.forEach(t => {
+            store[t].forEach(p => payload.push([date, t, p, sortIdx++]));
+        });
+        toggleLoader(true);
+        try {
+            const res = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'updateStructSheet', data: payload })
+            });
+            alert(await res.text());
+        } catch(e) { alert("儲存失敗"); }
+        toggleLoader(false);
+    }
+
+    function exportCSV() {
+        const date = document.getElementById('targetDate').value || "export";
+        let csv = "\ufeff日期,時段,崗位名稱,排序\n";
+        let sort = 1;
+        Object.keys(store).sort().forEach(t => {
+            store[t].forEach(p => { csv += `${date},${t},${p},${sort++}\n`; });
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `Structure_${date}.csv`;
+        link.click();
+    }
+
+    function importCSV(input) {
+        if (!input.files.length) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const lines = e.target.result.split(/\r?\n/);
+            const newStore = {};
+            for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(',');
+                if (cols.length >= 3) {
+                    const t = cols[1].trim();
+                    const p = cols[2].trim();
+                    if(!t || !p) continue;
+                    if (!newStore[t]) newStore[t] = [];
+                    newStore[t].push(p);
+                }
+            }
+            if (Object.keys(newStore).length > 0) {
+                store = newStore;
+                render();
+                alert("匯入成功！");
+            }
+        };
+        reader.readAsText(input.files[0]);
+        input.value = "";
+    }
+
+    function removePost(t, idx) { store[t].splice(idx, 1); render(); }
+    function deleteTime(t) { if(confirm("確定刪除？")) { delete store[t]; render(); } }
+    function toggleLoader(show) { document.getElementById('loading').style.display = show ? 'flex' : 'none'; }
+</script>
+</body>
+</html>

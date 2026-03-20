@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>當值管理系統 - 總控制台</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --secondary: #67b26f;
+            --accent: #f39c12;
+            --danger: #e74c3c;
+            --dark: #2c3e50;
+            --bg: #f0f4f8;
+        }
+
+        body {
+            font-family: "Microsoft JhengHei", sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--dark) 0%, #4b6cb7 100%);
+            color: white;
+            width: 100%;
+            padding: 40px 0;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            margin-bottom: 40px;
+        }
+
+        header h1 { margin: 0; font-size: 2.5em; letter-spacing: 2px; }
+        header p { margin: 10px 0 0; opacity: 0.8; }
+
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            width: 90%;
+            max-width: 1200px;
+            padding-bottom: 50px;
+        }
+
+        .menu-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            text-decoration: none;
+            color: var(--dark);
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border-bottom: 5px solid transparent;
+        }
+
+        .menu-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+            border-bottom: 5px solid var(--primary);
+        }
+
+        .icon {
+            font-size: 50px;
+            margin-bottom: 20px;
+        }
+
+        .menu-card h3 { margin: 10px 0; font-size: 1.4em; color: #333; }
+        .menu-card p { color: #777; font-size: 0.95em; line-height: 1.6; }
+
+        /* 特定卡片顏色裝飾 */
+        .card-manager { border-top: 5px solid var(--primary); }
+        .card-assign { border-top: 5px solid var(--secondary); }
+        .card-report { border-top: 5px solid var(--accent); }
+        .card-staff { border-top: 5px solid var(--danger); }
+
+        footer {
+            margin-top: auto;
+            padding: 20px;
+            color: #aaa;
+            font-size: 0.85em;
+        }
+
+        @media (max-width: 600px) {
+            header h1 { font-size: 1.8em; }
+            .container { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🏫 當值管理系統</h1>
+    <p>校園自動化排班及報表管理平台</p>
+</header>
+
+<div class="container">
+    
+    <a href="Manager.html" class="menu-card card-manager">
+        <div class="icon">⚙️</div>
+        <h3>崗位結構管理</h3>
+        <p>設定班級、時段分佈及初始化每日崗位架構。</p>
+    </a>
+
+    <a href="SmartAssign.html" class="menu-card card-assign">
+        <div class="icon">🎯</div>
+        <h3>智能排班系統</h3>
+        <p>手動/自動分配老師崗位，即時檢視工作量統計。</p>
+    </a>
+
+    <a href="report.html" class="menu-card card-report">
+        <div class="icon">📊</div>
+        <h3>數據報表中心</h3>
+        <p>生成全校總覽、老師個人表及空堂分析報告。</p>
+    </a>
+
+    <a href="DAILYStaffList.html" class="menu-card card-staff">
+        <div class="icon">👥</div>
+        <h3>老師出勤管理</h3>
+        <p>管理老師名單及設定每日請假/缺席狀態。</p>
+    </a>
+
+    <a href="StaffList.html" class="menu-card card-manager" style="border-top-color: #9b59b6;">
+        <div class="icon">📝</div>
+        <h3>基本資料維護</h3>
+        <p>更新全校老師檔案及系統基礎數據。</p>
+    </a>
+
+</div>
+
+<footer>
+    © 2026 學校行政管理系統 | 系統已就緒
+</footer>
+
+</body>
+</html>
