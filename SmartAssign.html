@@ -7,16 +7,32 @@
         :root { 
             --primary: #1a73e8; --success: #188038; --danger: #d93025; 
             --warning: #f4b400; --bg: #f8f9fa; --highlight: #fff9c4;
+            --dark: #3c4043;
         }
 
         body { font-family: 'Segoe UI', 'PingFang HK', sans-serif; background: var(--bg); margin: 0; padding: 20px; }
         .container { max-width: 1600px; margin: auto; }
         
         .header-bar { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 25px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 25px; }
+        
+        .btn-home { 
+            text-decoration: none; 
+            color: var(--dark); 
+            background: #eee; 
+            padding: 8px 15px; 
+            border-radius: 6px; 
+            font-size: 14px; 
+            display: flex; 
+            align-items: center; 
+            gap: 5px;
+            transition: 0.2s;
+            border: 1px solid #ddd;
+        }
+        .btn-home:hover { background: #e0e0e0; }
+
         .btn-group { display: flex; gap: 10px; }
         .btn { padding: 10px 18px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; display: flex; align-items: center; gap: 6px; }
         .btn-save { background: var(--primary); }
-        .btn-fill { background: var(--danger); }
         .btn-csv { background: var(--success); }
         .btn-import { background: var(--warning); color: #333; }
 
@@ -62,14 +78,17 @@
 
 <div class="container">
     <div class="header-bar">
-        <h2 style="margin:0;">📅 智策：高效拖放排班</h2>
+        <div style="display:flex; align-items:center; gap:20px;">
+            <a href="index.html" class="btn-home">🏠 返回主頁</a>
+            <h2 style="margin:0;">📅 智策：高效拖放排班</h2>
+        </div>
         <div style="display:flex; gap:10px; align-items:center;">
             <strong>日期：</strong><input type="date" id="targetDate" onchange="loadAllData()">
             <span id="loadMsg">🔄 讀取中...</span>
             <div class="btn-group">
                 <button class="btn btn-import" onclick="document.getElementById('csvFile').click()">📥 匯入</button>
                 <button class="btn btn-csv" onclick="exportCSV()">📤 匯出</button>
-                                <button class="btn btn-save" onclick="saveData()">💾 儲存</button>
+                <button class="btn btn-save" onclick="saveData()">💾 儲存</button>
             </div>
             <input type="file" id="csvFile" style="display:none" onchange="importCSV(this)" accept=".csv">
         </div>
@@ -81,7 +100,7 @@
 
     <div class="stats-panel">
         <div style="display:flex; justify-content:space-between;">
-            <h3 style="margin:0;">📊 工作量統計 (點擊名單可高亮崗位)</h3>
+            <h3 style="margin:0;">📊 當日可用老師統計 (已剔除缺席者)</h3>
             <button class="btn" style="background:#666; font-size:12px; padding:5px 10px;" onclick="highlightTeacher('')">清除高亮</button>
         </div>
         <div id="statsGrid" class="stats-grid"></div>
@@ -89,11 +108,13 @@
 </div>
 
 <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRQ2uxw_zJ1vuCyt9BwV8pBc1fLNeFd97kRIR9G5CsCzyfRpX-v5E9KlYpngeFYMZI5Q/exec"; 
-    let staffList = [];
-    let rawStruct = [];
+    // 💡 這裡是最新部署 URL
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbytUSXzmJx2eS_ll8KeF5Se6vcFl2_HMR_kGoGZePFkVh3ZD9xVfVIYQypyqqZmn08plg/exec"; 
+    
+    let staffList = [];       
+    let absenceList = [];     
+    let rawStruct = [];       
     let currentSchedule = {}; 
-    let savedDataMap = {};
     let currentHighlight = "";
 
     async function loadAllData() {
@@ -101,27 +122,51 @@
         if(!date) return;
         setLoading(true);
         try {
-            const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'getAllData', date: date }) });
+            const res = await fetch(SCRIPT_URL, { 
+                method: 'POST', 
+                body: JSON.stringify({ action: 'getAllData', date: date }) 
+            });
             const data = await res.json();
-            staffList = data.staff;
-            rawStruct = data.struct.sort((a,b) => (a.Sort || 0) - (b.Sort || 0));
             
-            savedDataMap = {};
-            data.saved.forEach(d => savedDataMap[`${d.TimeSlot.trim()}|${d.PostName.trim()}`] = d.AssignedStaff.trim());
+            // 讀取名單
+            staffList = data.staff || [];
+            // 讀取不能出席名單並清理空格
+            absenceList = (data.absence || []).map(a => (a.StaffName || "").trim());
+            
+            console.log("當日不能出席名單:", absenceList);
+
+            rawStruct = (data.struct || []).sort((a,b) => (Number(a.Sort) || 0) - (Number(b.Sort) || 0));
+            
+            let savedDataMap = {};
+            (data.saved || []).forEach(d => {
+                if(d.TimeSlot && d.PostName) {
+                    savedDataMap[`${d.TimeSlot.trim()}|${d.PostName.trim()}`] = (d.AssignedStaff || "").trim();
+                }
+            });
             
             currentSchedule = {...savedDataMap};
             renderSchedule();
             updateStats();
-        } catch (e) { alert("讀取失敗"); }
+        } catch (e) { 
+            console.error(e);
+            alert("讀取失敗"); 
+        }
         setLoading(false);
+    }
+
+    // 核心：過濾掉不能出席的人
+    function getAvailableStaff() {
+        return staffList.filter(name => !absenceList.includes(name.trim()));
     }
 
     function renderSchedule() {
         const area = document.getElementById('scheduleArea');
         const times = [...new Set(rawStruct.map(d => d.TimeSlot))];
+        const availableStaff = getAvailableStaff(); 
         
         area.innerHTML = times.map(t => {
             const posts = rawStruct.filter(p => p.TimeSlot === t);
+            // 找出該時段已用的老師
             const usedNames = Object.keys(currentSchedule)
                 .filter(k => k.startsWith(t + "|"))
                 .map(k => currentSchedule[k].trim())
@@ -131,7 +176,7 @@
                 <div class="time-section">
                     <div class="time-title">⏰ 時段：${t}</div>
                     <div class="teacher-pool-inline">
-                        ${staffList.map(name => `
+                        ${availableStaff.map(name => `
                             <div class="drag-teacher ${usedNames.includes(name.trim()) ? 'used' : ''}" 
                                  draggable="${!usedNames.includes(name.trim())}" 
                                  ondragstart="event.dataTransfer.setData('text', '${name.trim()}'); event.dataTransfer.setData('time', '${t}');">
@@ -159,12 +204,43 @@
         }).join('');
     }
 
+    // 更新統計表：結合剔除功能 + 精準計數
+    function updateStats() {
+        const counts = {};
+        const availableStaff = getAvailableStaff(); // 這裡已經剔除了不能出席的人
+        
+        // 1. 初始化計數器（只放可用老師）
+        availableStaff.forEach(n => {
+            counts[n.trim()] = 0;
+        });
+
+        // 2. 遍歷目前畫面的崗位格來計數（解決 6 變 7 問題）
+        rawStruct.forEach(p => {
+            const key = `${p.TimeSlot}|${p.PostName}`;
+            const assigned = (currentSchedule[key] || "").trim();
+            // 只有當老師在可用名單內，才計入統計
+            if (assigned && counts.hasOwnProperty(assigned)) {
+                counts[assigned]++;
+            }
+        });
+        
+        const grid = document.getElementById('statsGrid');
+        grid.innerHTML = availableStaff.map(n => {
+            const cleanName = n.trim();
+            const realCount = counts[cleanName];
+            return `
+                <div class="stat-card ${currentHighlight === cleanName ? 'active' : ''}" onclick="highlightTeacher('${cleanName}')">
+                    <span style="font-size:13px;">${cleanName}</span>
+                    <span class="stat-count">${realCount}</span>
+                </div>`;
+        }).join('');
+    }
+
     function handleDrop(e, time, post) {
         e.preventDefault();
         const dragTime = e.dataTransfer.getData('time');
         const name = e.dataTransfer.getData('text').trim();
         if(dragTime !== time) return alert("只能拖放到同一個時段內");
-        
         currentSchedule[`${time}|${post}`] = name;
         renderSchedule();
         updateStats();
@@ -176,96 +252,74 @@
         updateStats();
     }
 
-    function fillAllSaved() {
-        currentSchedule = {...savedDataMap};
-        renderSchedule();
-        updateStats();
-    }
-
-    // 核心修正：只根據現有的崗位結構去數人，徹底解決「多出一個」的問題
-    function updateStats() {
-        const counts = {};
-        // 1. 初始化所有名單老師為 0
-        staffList.forEach(n => {
-            if (n && n.trim()) counts[n.trim()] = 0;
-        });
-
-        // 2. 只針對 rawStruct 定義咗嘅崗位去數人，避開 currentSchedule 入面嘅殘留污糟資料
-        rawStruct.forEach(p => {
-            const key = `${p.TimeSlot}|${p.PostName}`;
-            const assigned = currentSchedule[key];
-            if (assigned) {
-                const cleanName = assigned.trim();
-                if (counts[cleanName] !== undefined) {
-                    counts[cleanName]++;
-                }
-            }
-        });
-        
-        const grid = document.getElementById('statsGrid');
-        grid.innerHTML = staffList.filter(n => n && n.trim()).map(n => {
-            const cleanName = n.trim();
-            const realCount = counts[cleanName];
-            return `
-                <div class="stat-card ${currentHighlight === cleanName ? 'active' : ''}" onclick="highlightTeacher('${cleanName}')">
-                    <span style="font-size:13px;">${cleanName}</span>
-                    <span class="stat-count">${realCount}</span>
-                </div>`;
-        }).join('');
-    }
-
     function highlightTeacher(name) {
         currentHighlight = (currentHighlight === name) ? "" : name; 
         renderSchedule();
         updateStats();
     }
 
-    function exportCSV() {
-        const date = document.getElementById('targetDate').value;
-        if(!date) return alert("請先選擇日期");
-        let csv = "\ufeff日期,時段,崗位,老師\n";
-        rawStruct.forEach(p => {
-            const val = currentSchedule[`${p.TimeSlot}|${p.PostName}`] || "";
-            csv += `${date},${p.TimeSlot},${p.PostName},${val}\n`;
-        });
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `排班表_${date}.csv`;
-        a.click();
-    }
-
-    function importCSV(input) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const lines = e.target.result.split('\n');
-            lines.slice(1).forEach(line => {
-                const parts = line.split(',');
-                if(parts.length >= 4) {
-                    currentSchedule[`${parts[1].trim()}|${parts[2].trim()}`] = parts[3].trim();
-                }
-            });
-            renderSchedule();
-            updateStats();
-        };
-        reader.readAsText(input.files[0]);
-    }
-
     async function saveData() {
         const date = document.getElementById('targetDate').value;
         if(!date) return alert("請選擇日期");
         setLoading(true);
-        const payload = Object.entries(currentSchedule).filter(e => e[1]).map(([k,v]) => {
-            const [t, p] = k.split('|'); return [date, t, p, v];
+        // 只儲存目前崗位結構內的資料
+        const payload = [];
+        rawStruct.forEach(p => {
+            const key = `${p.TimeSlot}|${p.PostName}`;
+            const v = currentSchedule[key];
+            if(v) payload.push([date, p.TimeSlot, p.PostName, v]);
         });
+        
         try {
-            const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'updateFinalSchedule', date: date, data: payload }) });
-            alert(await res.text());
+            const res = await fetch(SCRIPT_URL, { 
+                method: 'POST', 
+                body: JSON.stringify({ action: 'updateFinalSchedule', date: date, data: payload }) 
+            });
+            const result = await res.text();
+            alert(result);
         } catch(e) { alert("儲存失敗"); }
         setLoading(false);
     }
 
     function setLoading(show) { document.getElementById('loadMsg').style.display = show ? 'inline' : 'none'; }
+
+    function exportCSV() {
+        const date = document.getElementById('targetDate').value;
+        if(!date) return alert("請先選擇日期");
+        let csv = "\uFEFF日期,時段,崗位,老師\n";
+        rawStruct.forEach(p => {
+            const key = `${p.TimeSlot}|${p.PostName}`;
+            const name = currentSchedule[key] || "";
+            csv += `${date},${p.TimeSlot},${p.PostName},${name}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `Schedule_${date}.csv`;
+        link.click();
+    }
+
+    function importCSV(input) {
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const lines = e.target.result.split('\n');
+            lines.forEach((line, index) => {
+                if (index === 0 || !line.trim()) return;
+                const cols = line.split(',');
+                if (cols.length >= 4) {
+                    const time = cols[1].trim();
+                    const post = cols[2].trim();
+                    const name = cols[3].trim();
+                    currentSchedule[`${time}|${post}`] = name;
+                }
+            });
+            renderSchedule();
+            updateStats();
+            alert("匯入完成！記得點擊『儲存』。");
+        };
+        reader.readAsText(file);
+    }
 </script>
 </body>
 </html>
