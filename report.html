@@ -15,36 +15,20 @@
         }
 
         .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        
         .summary-badge { background: #f1f9ff; border: 1px solid #3498db; padding: 5px 12px; border-radius: 4px; margin: 5px; display: inline-block; font-size: 16px; }
         
         /* 時段區塊 */
         .time-slot-section { margin-bottom: 30px; border: 2px solid #ddd; border-radius: 12px; overflow: hidden; background: white; page-break-inside: avoid; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         .time-header { background: #2980b9; color: white; padding: 12px 20px; font-weight: bold; display: flex; justify-content: space-between; font-size: 18px; }
         
-        /* 格子容器 - 加大闊度 */
         .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; padding: 20px; border-bottom: 1px dashed #ddd; }
-        
-        /* 崗位盒子 - 重新設計 */
         .post-box { border: 2px solid #d6eaf8; border-radius: 8px; text-align: center; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
-        
-        /* 崗位名：加大、深色、加背景色塊 */
-        .post-name { 
-            font-size: 18px; 
-            color: #2c3e50; 
-            background: var(--post-bg); 
-            padding: 8px 5px; 
-            font-weight: bold;
-            border-bottom: 2px solid #d6eaf8;
-        }
-        
-        /* 老師名：維持醒目大字 */
+        .post-name { font-size: 18px; color: #2c3e50; background: var(--post-bg); padding: 8px 5px; font-weight: bold; border-bottom: 2px solid #d6eaf8; }
         .staff-name { color: #e67e22; font-weight: 900; font-size: 22px; padding: 12px 5px; }
 
         .free-staff-info { padding: 15px 20px; background: #f9f9f9; font-size: 15px; border-top: 1px solid #eee; }
         .free-tag { display: inline-block; background: white; border: 1.5px solid #3498db; padding: 4px 10px; border-radius: 6px; margin: 3px; font-weight: bold; color: #333; }
 
-        /* 空堂總表專用 */
         .free-table-card { background: white; padding: 20px; border: 1px solid var(--green); border-left: 8px solid var(--green); margin-top: 20px; page-break-inside: avoid; }
 
         /* 個人卡片 */
@@ -55,41 +39,72 @@
         th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
         th { background: #f8f9fa; font-weight: bold; }
 
-        .btn { padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; font-size: 15px; }
+        .btn { padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; font-size: 15px; transition: 0.3s; }
         .btn-blue { background: var(--primary); color: white; }
         .btn-green { background: var(--green); color: white; }
         
+        .toggle-container { display: flex; align-items: center; gap: 8px; background: #eee; padding: 8px 15px; border-radius: 50px; cursor: pointer; user-select: none; }
+        .toggle-container input { cursor: pointer; transform: scale(1.3); }
+
         .tab-nav { margin-bottom: 20px; border-bottom: 2px solid #ddd; display: flex; }
         .tab-btn { padding: 15px 30px; cursor: pointer; border: none; background: none; font-size: 18px; color: #666; font-weight: bold; }
         .tab-btn.active { color: var(--primary); border-bottom: 4px solid var(--primary); }
 
-        #print-header { display: none; }
+        .print-only-header { display: none; }
 
         @media print { 
+            @page { margin: 1cm; }
             .no-print, .floating-home-btn { display: none !important; } 
             body { background: white; padding: 0; }
-            #print-header { display: block; text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; }
+            
+            /* 打印時顯示標題與日期 */
+            .print-only-header { 
+                display: block !important; 
+                text-align: center; 
+                margin-bottom: 20px; 
+                border-bottom: 3px double #333;
+                padding-bottom: 10px;
+            }
+
+            /* 重要：個人表打印時，每個老師強制由新一頁開始 */
+            #personalOutput .teacher-card { 
+                break-before: page; 
+                margin-top: 0; 
+                border: 2px solid #3498db !important;
+            }
+            /* 第一個老師唔需要空白頁 */
+            #personalOutput .teacher-card:first-child { break-before: auto; }
+
+            .time-slot-section, .free-table-card { page-break-inside: avoid; }
             .post-box { border: 2px solid #000 !important; }
             .post-name { background: #eee !important; color: #000 !important; -webkit-print-color-adjust: exact; }
         }
+        
+        .hide-hours { display: none !important; }
     </style>
 </head>
 <body>
 
 <a href="index.html" class="floating-home-btn">🏠 返回系統首頁</a>
 
-<div id="print-header">
-    <h1 style="margin:0;">當值時數及空堂報告</h1>
-    <h3 id="displayDate">日期：尚未選擇</h3>
+<div class="print-only-header">
+    <div style="font-size: 24px; font-weight: bold;">🏫 當值報表 / 時數及空堂清單</div>
+    <div style="font-size: 18px;" class="print-date-label">日期：尚未選擇</div>
 </div>
 
 <div class="card no-print">
-    <h2 style="margin-top:0;">📊 當值報表系統 (強化顯示版)</h2>
-    <div style="display:flex; align-items:center; gap:10px; flex-wrap: wrap;">
+    <h2 style="margin-top:0;">📊 當值報表系統 (自動分頁打印版)</h2>
+    <div style="display:flex; align-items:center; gap:15px; flex-wrap: wrap;">
         <div>
             <strong>📅 日期：</strong>
             <input type="date" id="targetDate" style="padding: 10px; border: 2px solid #3498db; border-radius: 6px; font-size: 16px;" onchange="loadAllData()"> 
         </div>
+
+        <label class="toggle-container">
+            <input type="checkbox" id="showHoursToggle" checked onchange="toggleHoursDisplay()"> 
+            <strong>顯示時數</strong>
+        </label>
+
         <button class="btn btn-blue" onclick="exportToCSV()">📥 匯出時數 CSV</button>
         <button class="btn btn-green" onclick="exportFreeToCSV()">📥 匯出空堂 CSV</button>
         <button class="btn" style="background:#555; color:white;" onclick="window.print()">🖨️ 列印 / 生成 PDF</button>
@@ -138,18 +153,27 @@
         return (h > 0 ? h + " 小時 " : "") + m + " 分鐘";
     }
 
+    function toggleHoursDisplay() {
+        const isShow = document.getElementById('showHoursToggle').checked;
+        const hourElements = document.querySelectorAll('.hour-info');
+        hourElements.forEach(el => {
+            if (isShow) el.classList.remove('hide-hours');
+            else el.classList.add('hide-hours');
+        });
+    }
+
     async function loadAllData() {
         const dateStr = document.getElementById('targetDate').value;
         if(!dateStr) return;
-        document.getElementById('displayDate').innerText = "日期：" + dateStr;
+        document.querySelectorAll('.print-date-label').forEach(el => el.innerText = "日期：" + dateStr);
         document.getElementById('loader').style.display = 'inline';
-        
         try {
             const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'getReportData', date: dateStr }) });
             dataCache = await res.json();
             renderMainTable();
             renderFreeSummaryTable();
             renderPersonalSchedule();
+            toggleHoursDisplay();
         } catch(e) { alert("讀取失敗！"); }
         document.getElementById('loader').style.display = 'none';
     }
@@ -157,30 +181,26 @@
     function renderMainTable() {
         const data = dataCache.assignments;
         if(data.length === 0) { document.getElementById('matrixOutput').innerHTML = "❌ 無數據"; return; }
-
         const workloadMins = {};
         data.forEach(a => {
             if(a.AssignedStaff && a.AssignedStaff !== '-') {
                 workloadMins[a.AssignedStaff] = (workloadMins[a.AssignedStaff] || 0) + getDurationMinutes(a.TimeSlot);
             }
         });
-
         const times = [...new Set(data.map(d => d.TimeSlot))].sort();
-        let html = `<div class="card" style="margin-top:0;"><strong>📈 今日工作量 (總時數)：</strong><br>`;
+        let html = `<div class="card hour-info" style="margin-top:0;"><strong>📈 今日工作量 (總時數)：</strong><br>`;
         Object.keys(workloadMins).sort().forEach(name => {
             html += `<span class="summary-badge">${name}: <b>${formatTimeLabel(workloadMins[name])}</b></span>`;
         });
         html += `</div>`;
-
         times.forEach(t => {
             const tasksInSlot = data.filter(d => d.TimeSlot === t);
             const busy = tasksInSlot.map(a => a.AssignedStaff);
             const free = dataCache.allStaff.filter(s => !dataCache.absents.includes(s) && !busy.includes(s));
-            
             html += `
                 <div class="time-slot-section">
                     <div class="time-header">
-                        <span>⏰ 時段：${t} (${getDurationMinutes(t)} 分鐘)</span>
+                        <span>⏰ 時段：${t} <span class="hour-info">(${getDurationMinutes(t)} 分鐘)</span></span>
                         <span>當值：${tasksInSlot.length} 人</span>
                     </div>
                     <div class="grid-container">`;
@@ -231,15 +251,16 @@
         Object.keys(staffMap).sort().forEach(name => {
             const totalMins = staffMap[name].reduce((acc, task) => acc + getDurationMinutes(task.TimeSlot), 0);
             html += `<div class="teacher-card">
-                <div class="total-hours-box">今日總時數：${formatTimeLabel(totalMins)}</div>
+                <div class="total-hours-box hour-info">今日總時數：${formatTimeLabel(totalMins)}</div>
                 <div style="font-size:26px; border-bottom:3px solid #333; padding-bottom:10px;"><b>${name} 老師</b></div>
                 <p>日期：${dateStr}</p>
                 <table>
-                    <tr><th style="width:30%">時段</th><th style="width:20%">時長</th><th>當值崗位</th></tr>`;
+                    <thead><tr><th style="width:30%">時段</th><th style="width:20%" class="hour-info">時長</th><th>當值崗位</th></tr></thead>
+                    <tbody>`;
             staffMap[name].forEach(task => {
-                html += `<tr><td>${task.TimeSlot}</td><td>${getDurationMinutes(task.TimeSlot)} 分</td><td><b style="font-size:20px;">${task.PostName}</b></td></tr>`;
+                html += `<tr><td>${task.TimeSlot}</td><td class="hour-info">${getDurationMinutes(task.TimeSlot)} 分</td><td><b style="font-size:20px;">${task.PostName}</b></td></tr>`;
             });
-            html += `</table></div>`;
+            html += `</tbody></table></div>`;
         });
         document.getElementById('personalOutput').innerHTML = html || "暫無數據";
     }
