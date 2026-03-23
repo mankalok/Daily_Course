@@ -52,6 +52,10 @@
             border: 1px solid #3498db; padding: 20px; margin: 20px 0; 
             border-left: 8px solid #3498db; background: white; 
         }
+
+        /* --- 新增：空堂表專用樣式 --- */
+        .free-table-card { background: white; padding: 20px; border: 1px solid #27ae60; border-left: 8px solid #27ae60; margin-top: 20px; }
+        .free-table-card h3 { color: #27ae60; margin-top: 0; border-bottom: 2px solid #27ae60; padding-bottom: 10px; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
@@ -77,7 +81,7 @@
             .time-header { background: #ddd !important; color: black !important; border-bottom: 2px solid #000; }
             
             /* 個人表強制每一位老師一張紙 */
-            .teacher-card { 
+            .teacher-card, .free-table-card { 
                 break-after: page; 
                 border: 2px solid #000 !important;
                 margin: 0;
@@ -96,7 +100,9 @@
             <strong>📅 選擇日期：</strong>
             <input type="date" id="targetDate" style="padding: 8px; border: 1px solid #3498db; border-radius: 4px;" onchange="loadAllData()"> 
         </div>
-        <button class="btn btn-green" onclick="exportToCSV()">📥 匯出今日 CSV</button>
+        <button class="btn btn-blue" onclick="exportToCSV()">📥 匯出當值 CSV</button>
+        <button class="btn btn-green" onclick="exportFreeToCSV()">📥 匯出空堂 CSV</button>
+        
         <button class="btn" style="background:#555; color:white;" onclick="window.print()">🖨️ 列印報表 / 生成 PDF</button>
         <span id="loader" style="display:none; color: #3498db; font-weight: bold;">⚡ 正在讀取...</span>
     </div>
@@ -104,6 +110,7 @@
 
 <div class="tab-nav no-print">
     <button class="tab-btn active" onclick="switchTab('tab-main')">🏫 全校總覽 (連空堂)</button>
+    <button class="tab-btn" onclick="switchTab('tab-free-summary')">☕ 全校空堂總表</button> 
     <button class="tab-btn" onclick="switchTab('tab-personal')">👨‍🏫 老師個人表 (分頁列印)</button>
 </div>
 
@@ -113,12 +120,15 @@
     </div>
 </div>
 
+<div id="tab-free-summary" class="tab-content" style="display:none">
+    <div id="freeSummaryOutput"></div>
+</div>
+
 <div id="tab-personal" class="tab-content" style="display:none">
     <div id="personalOutput"></div>
 </div>
 
 <script>
-    // 邏輯部分保持不變
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwSs1sp75iwd7e39FkQk7gMcEgLvwJ8dNarGftWfFSFT_AkA83aApZ8yKD3ydJroQsDfw/exec";
     let dataCache = { assignments: [], absents: [], allStaff: [] };
 
@@ -133,6 +143,7 @@
             const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'getReportData', date: dateStr }) });
             dataCache = await res.json();
             renderMainTable();
+            renderFreeSummaryTable();
             renderPersonalSchedule();
         } catch(e) {
             alert("讀取失敗！");
@@ -152,7 +163,6 @@
 
         times.forEach(t => {
             const tasksInSlot = data.filter(d => d.TimeSlot === t);
-            
             const busy = tasksInSlot.map(a => a.AssignedStaff);
             const free = dataCache.allStaff.filter(s => !dataCache.absents.includes(s) && !busy.includes(s));
 
@@ -180,6 +190,39 @@
                 </div>`;
         });
         document.getElementById('matrixOutput').innerHTML = html;
+    }
+
+    function renderFreeSummaryTable() {
+        const data = dataCache.assignments;
+        const times = [...new Set(data.map(d => d.TimeSlot))].sort();
+        let html = `
+            <div class="free-table-card">
+                <h3>☕ 全校時段空堂名單總表</h3>
+                <p>日期：${document.getElementById('targetDate').value}</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:20%">時段</th>
+                            <th style="width:15%">可用人數</th>
+                            <th style="text-align:left; padding-left:15px;">空堂老師名單</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+        times.forEach(t => {
+            const busy = data.filter(d => d.TimeSlot === t).map(a => a.AssignedStaff);
+            const free = dataCache.allStaff.filter(s => !dataCache.absents.includes(s) && !busy.includes(s));
+            
+            html += `
+                <tr>
+                    <td><b>${t}</b></td>
+                    <td><span style="color:#27ae60; font-weight:bold;">${free.length}</span></td>
+                    <td style="text-align:left; padding:10px 15px;">${free.map(s => `<span class="free-tag">${s}</span>`).join('')}</td>
+                </tr>`;
+        });
+
+        html += `</tbody></table></div>`;
+        document.getElementById('freeSummaryOutput').innerHTML = times.length > 0 ? html : "暫無數據";
     }
 
     function renderPersonalSchedule() {
@@ -220,6 +263,7 @@
         event.currentTarget.classList.add('active');
     }
 
+    // 匯出當值名單
     function exportToCSV() {
         if(dataCache.assignments.length === 0) return alert("請先讀取數據！");
         let csv = "\ufeff時段,崗位,老師\n";
@@ -229,7 +273,27 @@
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
-        link.download = `DutyReport_${document.getElementById('targetDate').value}.csv`;
+        link.download = `當值報表_${document.getElementById('targetDate').value}.csv`;
+        link.click();
+    }
+
+    // --- 新增：匯出空堂名單邏輯 ---
+    function exportFreeToCSV() {
+        if(dataCache.assignments.length === 0) return alert("請先讀取數據！");
+        const times = [...new Set(dataCache.assignments.map(d => d.TimeSlot))].sort();
+        let csv = "\ufeff時段,可用人數,空堂老師名單\n";
+        
+        times.forEach(t => {
+            const busy = dataCache.assignments.filter(d => d.TimeSlot === t).map(a => a.AssignedStaff);
+            const free = dataCache.allStaff.filter(s => !dataCache.absents.includes(s) && !busy.includes(s));
+            // 將空堂名單用分號隔開放入同一格
+            csv += `"${t}","${free.length}","${free.join('; ')}"\n`;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `空堂報表_${document.getElementById('targetDate').value}.csv`;
         link.click();
     }
 </script>
