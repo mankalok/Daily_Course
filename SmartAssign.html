@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>智策：分段拖放排班管理系統</title>
+    <title>智策：分段拖放排班管理系統 (時數統計版)</title>
     <style>
         :root { 
             --primary: #1a73e8; --success: #188038; --danger: #d93025; 
@@ -65,11 +65,12 @@
         .drop-box.filled:hover .cancel-btn { display: block; }
 
         .stats-panel { background: white; padding: 20px; border-radius: 12px; border: 1px solid #ddd; margin-top: 20px; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-top: 15px; }
-        .stat-card { border: 1px solid #eee; padding: 10px; border-radius: 8px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 15px; }
+        .stat-card { border: 1px solid #eee; padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; transition: 0.2s; background: #fdfdfd; }
         .stat-card:hover { background: #f0f0f0; }
         .stat-card.active { border: 2px solid var(--warning); background: var(--highlight); }
-        .stat-count { font-size: 18px; font-weight: bold; color: var(--primary); display: block; }
+        .stat-count { font-size: 18px; font-weight: bold; color: var(--primary); }
+        .stat-duration { font-size: 12px; color: #e67e22; font-weight: bold; display: block; margin-top: 4px; border-top: 1px solid #eee; padding-top: 4px; }
         
         #loadMsg { color: var(--primary); font-weight: bold; display: none; margin-left: 10px; }
     </style>
@@ -100,7 +101,7 @@
 
     <div class="stats-panel">
         <div style="display:flex; justify-content:space-between;">
-            <h3 style="margin:0;">📊 當日可用老師統計 (已剔除缺席者)</h3>
+            <h3 style="margin:0;">📊 當日可用老師統計 (次數 及 總時數)</h3>
             <button class="btn" style="background:#666; font-size:12px; padding:5px 10px;" onclick="highlightTeacher('')">清除高亮</button>
         </div>
         <div id="statsGrid" class="stats-grid"></div>
@@ -108,7 +109,6 @@
 </div>
 
 <script>
-    // 💡 這裡是最新部署 URL
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbytUSXzmJx2eS_ll8KeF5Se6vcFl2_HMR_kGoGZePFkVh3ZD9xVfVIYQypyqqZmn08plg/exec"; 
     
     let staffList = [];       
@@ -116,6 +116,30 @@
     let rawStruct = [];       
     let currentSchedule = {}; 
     let currentHighlight = "";
+
+    // 解析時段分鐘數 (例如 "08:00 - 08:30" -> 30)
+    function getDurationMinutes(timeSlot) {
+        if (!timeSlot || !timeSlot.includes('-')) return 0;
+        try {
+            const parts = timeSlot.split('-').map(p => p.trim());
+            const parseTime = (t) => {
+                const [h, m] = t.split(':').map(Number);
+                return h * 60 + m;
+            };
+            return parseTime(parts[1]) - parseTime(parts[0]);
+        } catch (e) { return 0; }
+    }
+
+    // 格式化分鐘數 (例如 90 -> "1 小時 30 分鐘")
+    function formatDuration(totalMinutes) {
+        if (totalMinutes <= 0) return "0 分鐘";
+        const h = Math.floor(totalMinutes / 60);
+        const m = totalMinutes % 60;
+        let res = "";
+        if (h > 0) res += h + " 小時 ";
+        if (m > 0 || h === 0) res += m + " 分鐘";
+        return res;
+    }
 
     async function loadAllData() {
         const date = document.getElementById('targetDate').value;
@@ -128,13 +152,8 @@
             });
             const data = await res.json();
             
-            // 讀取名單
             staffList = data.staff || [];
-            // 讀取不能出席名單並清理空格
             absenceList = (data.absence || []).map(a => (a.StaffName || "").trim());
-            
-            console.log("當日不能出席名單:", absenceList);
-
             rawStruct = (data.struct || []).sort((a,b) => (Number(a.Sort) || 0) - (Number(b.Sort) || 0));
             
             let savedDataMap = {};
@@ -154,7 +173,6 @@
         setLoading(false);
     }
 
-    // 核心：過濾掉不能出席的人
     function getAvailableStaff() {
         return staffList.filter(name => !absenceList.includes(name.trim()));
     }
@@ -166,7 +184,6 @@
         
         area.innerHTML = times.map(t => {
             const posts = rawStruct.filter(p => p.TimeSlot === t);
-            // 找出該時段已用的老師
             const usedNames = Object.keys(currentSchedule)
                 .filter(k => k.startsWith(t + "|"))
                 .map(k => currentSchedule[k].trim())
@@ -174,7 +191,7 @@
 
             return `
                 <div class="time-section">
-                    <div class="time-title">⏰ 時段：${t}</div>
+                    <div class="time-title">⏰ 時段：${t} (${getDurationMinutes(t)} 分鐘)</div>
                     <div class="teacher-pool-inline">
                         ${availableStaff.map(name => `
                             <div class="drag-teacher ${usedNames.includes(name.trim()) ? 'used' : ''}" 
@@ -204,34 +221,33 @@
         }).join('');
     }
 
-    // 更新統計表：結合剔除功能 + 精準計數
     function updateStats() {
         const counts = {};
-        const availableStaff = getAvailableStaff(); // 這裡已經剔除了不能出席的人
+        const durations = {};
+        const availableStaff = getAvailableStaff();
         
-        // 1. 初始化計數器（只放可用老師）
         availableStaff.forEach(n => {
             counts[n.trim()] = 0;
+            durations[n.trim()] = 0;
         });
 
-        // 2. 遍歷目前畫面的崗位格來計數（解決 6 變 7 問題）
         rawStruct.forEach(p => {
             const key = `${p.TimeSlot}|${p.PostName}`;
             const assigned = (currentSchedule[key] || "").trim();
-            // 只有當老師在可用名單內，才計入統計
             if (assigned && counts.hasOwnProperty(assigned)) {
                 counts[assigned]++;
+                durations[assigned] += getDurationMinutes(p.TimeSlot);
             }
         });
         
         const grid = document.getElementById('statsGrid');
         grid.innerHTML = availableStaff.map(n => {
             const cleanName = n.trim();
-            const realCount = counts[cleanName];
             return `
                 <div class="stat-card ${currentHighlight === cleanName ? 'active' : ''}" onclick="highlightTeacher('${cleanName}')">
-                    <span style="font-size:13px;">${cleanName}</span>
-                    <span class="stat-count">${realCount}</span>
+                    <div style="font-size:14px; font-weight:bold; margin-bottom:5px;">${cleanName}</div>
+                    <div>次數：<span class="stat-count">${counts[cleanName]}</span></div>
+                    <span class="stat-duration">⏳ ${formatDuration(durations[cleanName])}</span>
                 </div>`;
         }).join('');
     }
@@ -262,7 +278,6 @@
         const date = document.getElementById('targetDate').value;
         if(!date) return alert("請選擇日期");
         setLoading(true);
-        // 只儲存目前崗位結構內的資料
         const payload = [];
         rawStruct.forEach(p => {
             const key = `${p.TimeSlot}|${p.PostName}`;
